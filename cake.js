@@ -83,36 +83,41 @@ $(".flame").dblclick(function () {
 async function initMicBlowDetection() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.log("Microphone access granted:", stream); // Check if stream is working
-    const audioContext = new (window.AudioContext ||
-      window.webkitAudioContext)();
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const analyser = audioContext.createAnalyser();
     const microphone = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(256, 1, 1);
 
     analyser.fftSize = 512;
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    // Audio Worklet Processor (modern way)
-    if (audioContext.audioWorklet) {
-      // Load the audio worklet processor (you'll need to add this script)
-      await audioContext.audioWorklet.addModule("processor.js"); // You'll need to create this file
-      const processor = new AudioWorkletNode(audioContext, "mic-processor");
-      microphone.connect(analyser);
-      analyser.connect(processor);
-      processor.connect(audioContext.destination);
+    microphone.connect(analyser);
+    analyser.connect(processor);
+    processor.connect(audioContext.destination);
 
-      processor.port.onmessage = (event) => {
-        const average = event.data;
-        console.log("Average volume level:", average);
-        if (average > 50) {
-          blowOutCandle(); // Function to blow out the candle
-        }
-      };
-    } else {
-      console.error("Audio Worklet not supported in this browser.");
-    }
+    processor.onaudioprocess = function () {
+      analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        sum += dataArray[i];
+      }
+
+      // Calculate average volume level
+      const average = sum / bufferLength;
+
+      // If the average volume is above a certain threshold, remove the flames
+      if (average > 50) {
+        blowOutCandle();
+      }
+    };
   } catch (err) {
     console.error("Error accessing the microphone:", err);
   }
 }
+
+// Add this part to call the microphone initialization when the page loads
+window.onload = function () {
+  initMicBlowDetection();
+};
