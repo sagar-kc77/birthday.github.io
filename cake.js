@@ -79,45 +79,60 @@ $(".flame").dblclick(function () {
   $(".hbd").addClass("text-animation");
 });
 
-// Function to initialize the microphone
-async function initMicBlowDetection() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    const microphone = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(256, 1, 1);
+// Function to start microphone access and listen for blowing or the word "blow"
+function startListening() {
+  if ("webkitSpeechRecognition" in window) {
+    var recognition = new webkitSpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = false;
 
-    analyser.fftSize = 512;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    recognition.onstart = function () {
+      console.log('Voice recognition started. Try saying "blow".');
+    };
 
-    microphone.connect(analyser);
-    analyser.connect(processor);
-    processor.connect(audioContext.destination);
+    recognition.onresult = function (event) {
+      var transcript = event.results[event.results.length - 1][0].transcript
+        .trim()
+        .toLowerCase();
+      console.log("Recognized: ", transcript);
 
-    processor.onaudioprocess = function () {
-      analyser.getByteFrequencyData(dataArray);
-
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-
-      // Calculate average volume level
-      const average = sum / bufferLength;
-
-      // If the average volume is above a certain threshold, remove the flames
-      if (average > 50) {
-        blowOutCandle();
+      // If "blow" is detected in the transcript, trigger candle blow-out
+      if (transcript.includes("blow")) {
+        extinguishCandle(); // Function to blow out the candle
+        recognition.stop();
       }
     };
-  } catch (err) {
-    console.error("Error accessing the microphone:", err);
+
+    recognition.onerror = function (event) {
+      console.error(event.error);
+    };
+
+    recognition.start();
+  } else {
+    console.log("Speech recognition not supported in this browser.");
   }
 }
 
-// Add this part to call the microphone initialization when the page loads
+// Function to blow out the candle
+function extinguishCandle() {
+  console.log("Blowing out the candle...");
+  // Hide the flame elements
+  document.querySelectorAll(".flame").forEach(function (flame) {
+    flame.classList.add("hide");
+  });
+
+  // Show confetti and birthday message
+  animateConfetti();
+  $(".candle").hide();
+  $(".cherry").show();
+  $(".hbd").show();
+  $(".clue2").hide();
+  $(".cherry").addClass("fall");
+  $(".hbd").addClass("text-animation");
+}
+
+// Trigger the microphone access when the page loads or when the user interacts with the cake
 window.onload = function () {
-  initMicBlowDetection();
+  startListening(); // Start listening for voice input as soon as the page loads
 };
